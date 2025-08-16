@@ -1,100 +1,64 @@
+# db_control/connect_MySQL.py
 from sqlalchemy import create_engine
-import os
+from sqlalchemy.engine import URL
+from urllib.parse import quote_plus
 from pathlib import Path
 from dotenv import load_dotenv
+import os, re
 
-# 環境変数の読み込み
-base_path = Path(__file__).parents[1]  # backendディレクトリへのパス
-# env_path = base_path / '.env'
-# load_dotenv(dotenv_path=env_path)
+ROOT = Path(__file__).resolve().parents[1]
+load_dotenv(dotenv_path=ROOT / ".env")
 
-# データベース接続情報
-DB_USER = os.getenv('DB_USER')
-DB_PASSWORD = os.getenv('DB_PASSWORD')
-DB_HOST = os.getenv('DB_HOST')
-DB_PORT = os.getenv('DB_PORT')
-DB_NAME = os.getenv('DB_NAME')
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_HOST = os.getenv("DB_HOST")
+DB_NAME = os.getenv("DB_NAME")
+DB_PORT = os.getenv("DB_PORT")  # 文字列
+RAW_DATABASE_URL = os.getenv("DATABASE_URL")  # あれば最優先だがバリデーション必須
 
-# SSL証明書のパス
-ssl_cert = str(base_path / 'DigiCertGlobalRootCA.crt.pem')
+def _is_valid_db_url(url: str) -> bool:
+    if not url:
+        return False
+    # 文字列に 'None' が紛れていたら不正とみなす
+    if re.search(r":None\b", url) or "None@" in url:
+        return False
+    return True
 
-# MySQLのURL構築
-DATABASE_URL = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+def build_url():
+    # 1) DATABASE_URL が正しいときだけ使う
+    if _is_valid_db_url(RAW_DATABASE_URL):
+        return RAW_DATABASE_URL
 
-# エンジンの作成（SSL設定を追加）
+    # 2) 個別変数から安全に構築（port は未指定なら None）
+    if not all([DB_USER, DB_PASSWORD, DB_HOST, DB_NAME]):
+        raise RuntimeError("DB 環境変数が不足しています（DB_USER/DB_PASSWORD/DB_HOST/DB_NAME）")
+
+    port = int(DB_PORT) if (DB_PORT and DB_PORT.strip().isdigit()) else None
+
+    return URL.create(
+        drivername="mysql+pymysql",
+        username=quote_plus(DB_USER),
+        password=quote_plus(DB_PASSWORD),
+        host=DB_HOST,
+        port=port,
+        database=DB_NAME,
+    )
+
+url = build_url()
+
+# SSL を使う場合（Azure MySQL）
+SSL_CERT_PATH = str(ROOT / "DigiCertGlobalRootCA.crt.pem")
+use_ssl = os.getenv("DB_SSL", "true").lower() != "false"
+connect_args = {"ssl": {"ca": SSL_CERT_PATH}} if use_ssl else {}
+
 engine = create_engine(
-    DATABASE_URL,
-    connect_args={
-        "ssl": {
-            "ssl_ca": ssl_cert
-        }
-    },
-    echo=True,
+    url,
+    connect_args=connect_args,
     pool_pre_ping=True,
-    pool_recycle=3600
+    pool_recycle=3600,
+    echo=False,
 )
 
-print("Current working directory:", os.getcwd())
-print("Certificate file exists:", os.path.exists('DigiCertGlobalRootCA.crt.pem'))
-
-# from sqlalchemy import create_engine
-# import os
-# from pathlib import Path
-# from dotenv import load_dotenv
-
-# # 環境変数の読み込み
-# base_path = Path(__file__).parents[1]  # backendディレクトリへのパス
-# # env_path = base_path / '.env'
-# # load_dotenv(dotenv_path=env_path)
-
-# # データベース接続情報
-# DB_USER = os.getenv('DB_USER')
-# DB_PASSWORD = os.getenv('DB_PASSWORD')
-# DB_HOST = os.getenv('DB_HOST')
-# DB_PORT = os.getenv('DB_PORT')
-# DB_NAME = os.getenv('DB_NAME')
-
-# # SSL証明書のパス
-# ssl_cert = str(base_path / 'DigiCertGlobalRootCA.crt.pem')
-
-# # MySQLのURL構築
-# DATABASE_URL = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-
-# # エンジンの作成（SSL設定を追加）
-# engine = create_engine(
-#     DATABASE_URL,
-#     connect_args={
-#         "ssl": {
-#             "ssl_ca": ssl_cert
-#         }
-#     },
-#     echo=True,
-#     pool_pre_ping=True,
-#     pool_recycle=3600
-# )
-
-# from sqlalchemy import create_engine
-
-# import os
-# from dotenv import load_dotenv
-
-# # 環境変数の読み込み
-# load_dotenv()
-
-# # データベース接続情報
-# DB_USER = os.getenv('DB_USER')
-# DB_PASSWORD = os.getenv('DB_PASSWORD')
-# DB_HOST = os.getenv('DB_HOST')
-# DB_PORT = os.getenv('DB_PORT')
-# DB_NAME = os.getenv('DB_NAME')
-
-# # MySQLのURL構築
-# DATABASE_URL = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-
-# # エンジンの作成
-# engine = create_engine(
-#     DATABASE_URL,
-#     echo=True,
-#     pool_pre_ping=True,
-#     pool_recycle=3600
-# )
+# デバッグ表示（安全）
+print("Using DATABASE_URL?", _is_valid_db_url(RAW_DATABASE_URL))
+print("DB_HOST =", DB_HOST, " DB_PORT =", repr(DB_PORT), " SSL cert exists? ->", os.path.exists(SSL_CERT_PATH))
