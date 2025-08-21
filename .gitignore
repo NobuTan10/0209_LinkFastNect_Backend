@@ -1,5 +1,22 @@
-.env
-*.pyc
+# Python cache
 __pycache__/
+*.py[cod]
+*.egg-info/
+
+# Virtualenvs
+.venv/
+venv/
+
+# Env files
+.env
+.env.*
+
+# DB
 *.db
+
+# Cert/keys
+*.pem
 DigiCertGlobalRootCA.crt.pem
+
+# macOS
+.DS_Store
