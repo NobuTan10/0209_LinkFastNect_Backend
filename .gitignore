@@ -20,3 +20,6 @@ DigiCertGlobalRootCA.crt.pem
 
 # macOS
 .DS_Store
+
+# Azure Publish Settings (機密ファイル)
+*.PublishSettings
