@@ -3,3 +3,9 @@
 __pycache__/
 *.db
 DigiCertGlobalRootCA.crt.pem
+.venv/
+__pycache__/
+*.pyc
+.env
+*.pem
+.DS_Store

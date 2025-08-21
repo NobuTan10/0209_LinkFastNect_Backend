@@ -9,6 +9,15 @@ base_path = Path(__file__).parents[1]  # backendディレクトリへのパス
 env_path = base_path / '.env'
 load_dotenv(dotenv_path=env_path)
 
+<<<<<<< HEAD
+=======
+print("DB_USER:", os.getenv('DB_USER'))
+print("DB_PASSWORD:", os.getenv('DB_PASSWORD'))
+print("DB_HOST:", os.getenv('DB_HOST'))
+print("DB_PORT:", os.getenv('DB_PORT'))
+print("DB_NAME:", os.getenv('DB_NAME'))
+
+>>>>>>> de2ab7a (0209deploy)
 # データベース接続情報
 DB_USER = os.getenv('DB_USER')
 DB_PASSWORD = os.getenv('DB_PASSWORD')
@@ -20,6 +29,7 @@ DB_NAME = os.getenv('DB_NAME')
 ssl_cert = str(base_path / 'DigiCertGlobalRootCA.crt.pem')
 
 # MySQLのURL構築
+<<<<<<< HEAD
 DATABASE_URL = (
     f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
     "?charset=utf8mb4"
@@ -31,6 +41,21 @@ engine = create_engine(
     echo=True,
     pool_pre_ping=True,
     pool_recycle=3600,
+=======
+DATABASE_URL = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+
+# エンジンの作成（SSL設定を追加）
+engine = create_engine(
+   DATABASE_URL,
+   connect_args={
+       "ssl": {
+           "ssl_ca": ssl_cert
+       }
+   },
+   echo=True,
+   pool_pre_ping=True,
+   pool_recycle=3600
+>>>>>>> de2ab7a (0209deploy)
 )
 
 # Baseクラスの作成
