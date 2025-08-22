@@ -2,6 +2,9 @@ from sqlalchemy import create_engine
 # import sqlalchemy
 
 import os
+SSL_CA_PATH = os.getenv("SSL_CA_PATH", "DigiCertGlobalRootCA.crt.pem")
+# 例: mysql.connector.connect(..., ssl_ca=SSL_CA_PATH)
+
 # uname() error回避
 import platform
 print("platform:", platform.uname())
