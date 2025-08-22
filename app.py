@@ -1,16 +1,15 @@
+# app.py
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import requests
 import json
-# from db_control import crud, mymodels
+
+# モデル/CRUD（import時にDBへ接続・create_allを走らせないことが重要）
 from db_control import crud, mymodels
-# MySQLのテーブル作成
-# from db_control.create_tables import init_db
 
-# # アプリケーション初期化時にテーブルを作成
-# init_db()
-
+# ★ 追加：起動時にだけテーブル作成する関数を呼ぶ
+from db_control.create_tables import init_db
 
 class Customer(BaseModel):
     customer_id: str
@@ -18,34 +17,39 @@ class Customer(BaseModel):
     age: int
     gender: str
 
-
 app = FastAPI()
 
-# CORSミドルウェアの設定
+# CORS（必要に応じて許可ドメインを絞る）
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # 本番では指定推奨
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# ★ 追加：アプリ起動時にDB初期化（create_all）を実行
+@app.on_event("startup")
+def on_startup():
+    init_db()  # ← ここで初めてDBに触る
+
+# ★ 追加：単純ヘルスチェック（DBに触らない）
+@app.get("/healthz")
+def healthz():
+    return {"status": "ok"}
+
 @app.get("/")
 def index():
     return {"message": "FastAPI top page!"}
 
-
 @app.post("/customers")
 def create_customer(customer: Customer):
     values = customer.dict()
-    tmp = crud.myinsert(mymodels.Customers, values)
+    crud.myinsert(mymodels.Customers, values)
     result = crud.myselect(mymodels.Customers, values.get("customer_id"))
-
     if result:
-        result_obj = json.loads(result)
-        return result_obj if result_obj else None
+        return json.loads(result) or None
     return None
-
 
 @app.get("/customers")
 def read_one_customer(customer_id: str = Query(...)):
@@ -58,34 +62,26 @@ def read_one_customer(customer_id: str = Query(...)):
 @app.get("/allcustomers")
 def read_all_customer():
     result = crud.myselectAll(mymodels.Customers)
-    # 結果がNoneの場合は空配列を返す
-    if not result:
-        return []
-    # JSON文字列をPythonオブジェクトに変換
-    return json.loads(result)
-
+    return [] if not result else json.loads(result)
 
 @app.put("/customers")
 def update_customer(customer: Customer):
     values = customer.dict()
-    values_original = values.copy()
-    tmp = crud.myupdate(mymodels.Customers, values)
-    result = crud.myselect(mymodels.Customers, values_original.get("customer_id"))
+    crud.myupdate(mymodels.Customers, values)
+    result = crud.myselect(mymodels.Customers, values.get("customer_id"))
     if not result:
         raise HTTPException(status_code=404, detail="Customer not found")
     result_obj = json.loads(result)
     return result_obj[0] if result_obj else None
 
-
 @app.delete("/customers")
 def delete_customer(customer_id: str = Query(...)):
-    result = crud.mydelete(mymodels.Customers, customer_id)
-    if not result:
+    ok = crud.mydelete(mymodels.Customers, customer_id)
+    if not ok:
         raise HTTPException(status_code=404, detail="Customer not found")
     return {"customer_id": customer_id, "status": "deleted"}
 
-
 @app.get("/fetchtest")
 def fetchtest():
-    response = requests.get('https://jsonplaceholder.typicode.com/users')
+    response = requests.get("https://jsonplaceholder.typicode.com/users", timeout=10)
     return response.json()

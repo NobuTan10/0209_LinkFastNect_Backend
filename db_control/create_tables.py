@@ -1,9 +1,7 @@
-from mymodels import Base  # User, Comment
-from connect import engine
+# db_control/create_tables.py
+from .mymodels import Base
+from .connect import engine
 
-import platform
-print(platform.uname())
-
-
-print("Creating tables >>> ")
-Base.metadata.create_all(bind=engine)
+def init_db() -> None:
+    """FastAPIのstartupで呼ぶ。import時には実行しない。"""
+    Base.metadata.create_all(engine)
