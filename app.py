@@ -85,3 +85,13 @@ def delete_customer(customer_id: str = Query(...)):
 def fetchtest():
     response = requests.get("https://jsonplaceholder.typicode.com/users", timeout=10)
     return response.json()
+
+
+from sqlalchemy import text as sql_text
+from db_control.connect_MySQL import engine
+
+@app.get("/db-healthz")
+def db_healthz():
+    with engine.connect() as conn:
+        conn.execute(sql_text("SELECT 1"))
+    return {"db": "ok"}
