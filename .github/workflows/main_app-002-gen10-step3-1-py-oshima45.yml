@@ -58,4 +58,4 @@ jobs:
         with:
           app-name: 'app-002-gen10-step3-1-py-oshima45'
           slot-name: 'Production'
-          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_BA111DE2005944CDB11E64543A9CC822 }}
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_F155DEDCBB3343BF93CC4884EB3DDE43 }}
