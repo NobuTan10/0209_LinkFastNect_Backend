@@ -61,24 +61,37 @@ def myselect(mymodel, customer_id):
     return result_json
 
 
+from sqlalchemy import select
+# ... 既存 import はそのまま
+
 def myselectAll(mymodel):
-    # session構築
     Session = sessionmaker(bind=engine)
     session = Session()
-    query = select(mymodel)
     try:
-        # トランザクションを開始
         with session.begin():
-            df = pd.read_sql_query(query, con=engine)
-            result_json = df.to_json(orient='records', force_ascii=False)
+            # SQLAlchemy 2.0 流儀で実行して、そのまま Python オブジェクトを得る
+            rows = session.execute(select(mymodel)).scalars().all()
 
-    except sqlalchemy.exc.IntegrityError:
-        print("一意制約違反により、挿入に失敗しました")
+        # モデルを JSON に手で変換（Customers 前提）
+        result_dict_list = []
+        for r in rows:
+            result_dict_list.append({
+                "customer_id": r.customer_id,
+                "customer_name": r.customer_name,
+                "age": r.age,
+                "gender": r.gender
+            })
+        result_json = json.dumps(result_dict_list, ensure_ascii=False)
+
+    except Exception as e:
+        # デバッグしやすいようにログ
+        print(f"[E0001] myselectAll failed: {type(e).__name__}: {e}")
         result_json = None
+    finally:
+        session.close()
 
-    # セッションを閉じる
-    session.close()
     return result_json
+
 
 
 def myupdate(mymodel, values):
