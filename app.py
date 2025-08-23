@@ -42,10 +42,22 @@ app.add_middleware(
 # -------------------------
 # Lifecycle
 # -------------------------
+# 変更後（DBに到達できなくてもアプリは起動する）
+import os
+import logging
+
+logger = logging.getLogger("uvicorn.error")
+
 @app.on_event("startup")
 def on_startup():
-    # 起動時に初回だけテーブル作成（import時には走らない）
-    init_db()
+    # 環境変数で有効化した時だけ実行（デフォルトは実行しない）
+    if os.getenv("RUN_INIT_DB", "false").lower() == "true":
+        try:
+            init_db()
+            logger.info("init_db() completed.")
+        except Exception as e:
+            logger.error(f"init_db() skipped due to error: {e}")
+            # 起動は継続
 
 # -------------------------
 # Health / Diag
