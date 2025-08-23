@@ -1,55 +1,103 @@
 # app.py
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import requests
 import json
+import os
+import os.path
 
-# モデル/CRUD（import時にDBへ接続・create_allを走らせないことが重要）
+# DB接続 & SQLユーティリティ
+from sqlalchemy import text as sql_text
+from db_control.connect_MySQL import engine
+
+# モデル/CRUD（import時に create_all を走らせないことが重要）
 from db_control import crud, mymodels
+from db_control.create_tables import init_db  # 起動時だけ create_all を実行
 
-# ★ 追加：起動時にだけテーブル作成する関数を呼ぶ
-from db_control.create_tables import init_db
-
+# -------------------------
+# Pydantic models
+# -------------------------
 class Customer(BaseModel):
     customer_id: str
     customer_name: str
     age: int
     gender: str
 
+# -------------------------
+# FastAPI app
+# -------------------------
 app = FastAPI()
 
-# CORS（必要に応じて許可ドメインを絞る）
+# CORS（必要に応じて許可ドメインを絞ってください）
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 本番では指定推奨
+    allow_origins=["*"],   # 本番では特定ドメインに絞る推奨
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ★ 追加：アプリ起動時にDB初期化（create_all）を実行
+# -------------------------
+# Lifecycle
+# -------------------------
 @app.on_event("startup")
 def on_startup():
-    init_db()  # ← ここで初めてDBに触る
+    # 起動時に初回だけテーブル作成（import時には走らない）
+    init_db()
 
-# ★ 追加：単純ヘルスチェック（DBに触らない）
+# -------------------------
+# Health / Diag
+# -------------------------
 @app.get("/healthz")
 def healthz():
     return {"status": "ok"}
 
+@app.get("/diag")
+def diag():
+    """環境変数とSSL証明書の有無を簡易確認"""
+    ssl_path = os.getenv("MYSQL_SSL_CA", "/home/site/wwwroot/DigiCertGlobalRootCA.crt.pem")
+    return {
+        "DB_HOST": os.getenv("DB_HOST"),
+        "DB_USER": os.getenv("DB_USER"),
+        "DB_NAME": os.getenv("DB_NAME"),
+        "DB_PORT": os.getenv("DB_PORT"),
+        "SSL_CA": ssl_path,
+        "SSL_CA_exists": os.path.exists(ssl_path),
+    }
+
+@app.get("/db-healthz")
+def db_healthz():
+    """DB到達チェック（例外はJSONで返す：原因特定用）"""
+    try:
+        with engine.connect() as conn:
+            conn.execute(sql_text("SELECT 1"))
+        return {"db": "ok"}
+    except Exception as e:
+        # 一時的に例外を返して原因を可視化（デバッグ後は200だけ返す実装に戻してOK）
+        print("DB_HEALTHZ_ERROR:", repr(e))
+        return JSONResponse(
+            status_code=500,
+            content={"error": type(e).__name__, "message": str(e)},
+        )
+
+# -------------------------
+# Routes
+# -------------------------
 @app.get("/")
 def index():
     return {"message": "FastAPI top page!"}
 
-@app.post("/customers")
+@app.post("/customers", status_code=201)
 def create_customer(customer: Customer):
     values = customer.dict()
-    crud.myinsert(mymodels.Customers, values)
+    ok = crud.myinsert(mymodels.Customers, values)
+    if not ok:
+        raise HTTPException(status_code=500, detail="E0100: insert failed")
+    # 登録結果（確認のために再取得して返却）
     result = crud.myselect(mymodels.Customers, values.get("customer_id"))
-    if result:
-        return json.loads(result) or None
-    return None
+    return (json.loads(result) or [values])[0]
 
 @app.get("/customers")
 def read_one_customer(customer_id: str = Query(...)):
@@ -67,7 +115,9 @@ def read_all_customer():
 @app.put("/customers")
 def update_customer(customer: Customer):
     values = customer.dict()
-    crud.myupdate(mymodels.Customers, values)
+    ok = crud.myupdate(mymodels.Customers, values)
+    if not ok:
+        raise HTTPException(status_code=500, detail="E0200: update failed")
     result = crud.myselect(mymodels.Customers, values.get("customer_id"))
     if not result:
         raise HTTPException(status_code=404, detail="Customer not found")
@@ -85,13 +135,3 @@ def delete_customer(customer_id: str = Query(...)):
 def fetchtest():
     response = requests.get("https://jsonplaceholder.typicode.com/users", timeout=10)
     return response.json()
-
-
-from sqlalchemy import text as sql_text
-from db_control.connect_MySQL import engine
-
-@app.get("/db-healthz")
-def db_healthz():
-    with engine.connect() as conn:
-        conn.execute(sql_text("SELECT 1"))
-    return {"db": "ok"}
